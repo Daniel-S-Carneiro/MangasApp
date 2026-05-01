@@ -1,0 +1,19 @@
+# Dependências
+node_modules/
+frontend/node_modules/
+dist/
+dist_electron/
+frontend/dist/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Banco de Dados Local (opcional - geralmente não se sobe o .db)
+backend/*.db
+
+# Electron / Logs
+*.log
+.vscode/

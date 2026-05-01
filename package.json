@@ -1,0 +1,51 @@
+{
+  "name": "project-electron-vue-python",
+  "version": "1.0.0",
+  "productName": "MeuAppGenerico",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.ts",
+  "scripts": {
+    "dev:vue": "npm run dev --prefix frontend",
+    "dev:electron": "electron --import=tsx .",
+    "dev": "concurrently --kill-others \"npm run dev:vue\" \"npm run dev:electron\"",
+    "build": "npm run build:vue && electron-builder",
+    "build:vue": "npm run build --prefix frontend",
+    "start:prod": "start .\\dist_electron\\win-unpacked\\MeuAppGenericos.exe",
+    "clean:power": "taskkill /F /IM MeuAppGenericos.exe /T /FI \"STATUS eq RUNNING\" & taskkill /F /IM MeuAppGenericos.exe /T /FI \"STATUS eq UNKNOWN\" & taskkill /F /IM electron.exe /T"
+  },
+  "build": {
+    "appId": "com.exemplo.app",
+    "productName": "MeuAppGenericos",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "electron/**/*",
+      "frontend/dist/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Meu App Genericos"
+    }
+  }
+}
