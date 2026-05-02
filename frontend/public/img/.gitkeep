@@ -1,0 +1,3 @@
+frontend/public/img/*
+!frontend/public/img/.gitkeep
+!frontend/public/img/default.jpg

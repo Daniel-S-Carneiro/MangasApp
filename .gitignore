@@ -1,19 +1,41 @@
-# Dependências
+# --- Logs e Temporários ---
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+.DS_Store
+*.local
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.sln
+*.sw?
+
+# --- Dependências (Node e Python) ---
 node_modules/
 frontend/node_modules/
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# --- Build e Distribuição ---
 dist/
 dist_electron/
 frontend/dist/
+frontend/dist-ssr/
 
-# Python
-__pycache__/
-*.pyc
-venv/
-.venv/
+# --- Banco de Dados Local ---
+# Ignora o banco e arquivos de cache do SQLite
+backend/data/mangas.db
+backend/data/*.db-journal
+backend/data/*.db-shm
+backend/data/*.db-wal
 
-# Banco de Dados Local (opcional - geralmente não se sobe o .db)
-backend/*.db
-
-# Electron / Logs
-*.log
-.vscode/
+# --- Imagens e Capas ---
+# Ignora as capas baixadas para não subir imagens com direitos autorais
+frontend/public/img/*
+# Mantém a estrutura da pasta e o arquivo padrão
+!frontend/public/img/default.jpg
+!frontend/public/img/.gitkeep

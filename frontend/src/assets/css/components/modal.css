@@ -1,0 +1,72 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.modal-card {
+  background: #1e1e1e;
+  padding: 30px;
+  border-radius: 15px;
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+  border: 1px solid #333;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.modal-card h2 {
+  margin-bottom: 15px; /* espaço entre o título principal e o subtítulo */
+  font-size: 1.4em;
+}
+
+.modal-card h3 {
+  margin-bottom: 20px; /* espaço entre subtítulo e campos */
+  font-size: 1.1em;
+  color: #888;
+}
+
+.modal-card .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px; /* aumenta o espaçamento entre label/input */
+}
+
+.modal-card label {
+  font-weight: bold;
+  margin-bottom: 6px; /* separa melhor label do input */
+  color: var(--text);
+}
+
+.modal-card input {
+  width: 100%;
+  padding: 12px;
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-size: 1rem;
+}
+
+.modal-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* mais espaço entre os botões */
+  margin-top: 25px; /* separa os botões dos campos */
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 0.9em;
+  color: #888;
+}

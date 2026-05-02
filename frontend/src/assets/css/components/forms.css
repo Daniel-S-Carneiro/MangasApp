@@ -1,0 +1,59 @@
+.form-container {
+  display: none;
+  background: var(--card);
+  padding: 20px;
+  border-radius: 8px;
+  max-width: 500px;
+  margin: 0 auto 30px;
+  border: 1px solid var(--border);
+}
+
+.form-open {
+  display: block !important;
+}
+
+.form-container input,
+.form-container select {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 15px;
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.form-container h3 {
+  margin-bottom: 20px; /* espaço entre o título e os campos */
+  font-size: 1.3em;
+  text-align: center;
+}
+
+.file-input-container {
+  width: 100%;
+  margin: 15px 0;
+}
+
+#capa-input {
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 8px;
+  width: 100%;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#capa-input::-webkit-file-upload-button {
+  background: #444;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 3px;
+  margin-right: 10px;
+  cursor: pointer;
+}
+
+#capa-input::-webkit-file-upload-button:hover {
+  background: #555;
+}

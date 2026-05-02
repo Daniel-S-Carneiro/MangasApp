@@ -1,0 +1,7 @@
+body.light-mode {
+  --bg: #f0f2f5;
+  --card: #ffffff;
+  --text: #1a1a1a;
+  --border: #ddd;
+  --input-bg: #fff;
+}

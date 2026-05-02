@@ -1,0 +1,87 @@
+.btn-theme,
+.btn-toggle,
+.btn-danger,
+.btn-save,
+.btn-upload,
+.btn-delete,
+.btn-cancel,
+.btn-ler,
+.btn-icon {
+  padding: 10px 15px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.btn-theme {
+  background: #6c5ce7;
+  color: white;
+}
+
+.btn-toggle {
+  background: #333;
+  color: white;
+  border: 1px solid var(--border);
+}
+
+.btn-save {
+  width: 100%;
+  padding: 12px;
+  background: #00b894;
+  color: white;
+}
+
+.btn-upload {
+  width: 100%;
+  padding: 12px;
+  background-color: #2c2c2c;
+  border: 2px dashed #444;
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-upload:hover {
+  border-color: #00ca91;
+  background-color: #333;
+}
+
+.btn-delete {
+  background: #e74c3c;
+  color: white;
+}
+
+.btn-cancel {
+  background: #555;
+  color: white;
+}
+
+.btn-ler {
+  flex: 4; /* ocupa mais espaço horizontal */
+  background: #0099ff;
+  color: white;
+  text-decoration: none;
+  text-align: center;
+  padding: 10px 0; /* altura menor, mais achatado */
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+.btn-icon {
+  flex: 1; /* ocupa menos espaço horizontal */
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.3em; /* ícone maior para preencher */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px; /* mais compacto */
+}
