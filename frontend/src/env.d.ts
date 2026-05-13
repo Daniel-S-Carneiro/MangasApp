@@ -6,6 +6,7 @@ declare global {
       callPython: (data: any) => Promise<any>;
       selecionarArquivo: () => Promise<string[]>;
       openLink: (url: string) => Promise<void>;
+      onLog: (callback: (message: string) => void) => void;
     };
   }
   // Esta linha é CRUCIAL para o erro no <template> sumir

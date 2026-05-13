@@ -33,6 +33,13 @@ backend/data/*.db-journal
 backend/data/*.db-shm
 backend/data/*.db-wal
 
+# --- Build Backend ---
+backend/dist/app.exe
+backend/app.exe
+backend/build/
+build/app/
+app.spec
+
 # --- Imagens e Capas ---
 # Ignora as capas baixadas para não subir imagens com direitos autorais
 frontend/public/img/*

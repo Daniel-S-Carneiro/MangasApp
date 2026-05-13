@@ -10,12 +10,14 @@ import {
 import * as path from "path";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
+import * as fs from "fs";
 
 process.env["ELECTRON_DISABLE_SECURITY_WARNINGS"] = "true";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const isDev = !app.isPackaged;
+const ENABLE_DEBUG_LOGS = false;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -42,8 +44,8 @@ protocol.registerSchemesAsPrivileged([
 
 function createWindow(): void {
   const win = new BrowserWindow({
-    width: 1000,
-    height: 700,
+    width: 1200,
+    height: 800,
     show: false,
     title: "Gerenciador de Mangás",
     icon: path.join(__dirname, "../frontend/public/icon/manga.ico"),
@@ -52,15 +54,13 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       webSecurity: false,
-      sandbox: false,
     },
   });
 
   win.maximize();
 
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  ipcMain.handle("open-link", async (_event, url: string) => {
     shell.openExternal(url);
-    return { action: "deny" };
   });
 
   if (isDev) {
@@ -79,9 +79,80 @@ function createWindow(): void {
 
   win.on("page-title-updated", (e) => e.preventDefault());
   win.once("ready-to-show", () => win.show());
+
+  win.webContents.on("did-finish-load", () => {
+    if (ENABLE_DEBUG_LOGS) {
+      // exemplo simples
+      win.webContents.send("log", "teste");
+
+      // agora envia os logs de listarCapas para o renderer
+      const imgDir = path.join(
+        process.resourcesPath,
+        "frontend",
+        "public",
+        "img",
+      );
+      try {
+        const files = fs.readdirSync(imgDir);
+        win.webContents.send("log", "Arquivos de capa encontrados no build:");
+        files.forEach((f) => {
+          win.webContents.send("log", " - " + f);
+        });
+      } catch (err) {
+        if (err instanceof Error) {
+          win.webContents.send("log", "Erro ao listar imagens: " + err.message);
+        } else {
+          win.webContents.send("log", "Erro desconhecido ao listar imagens");
+        }
+      }
+    }
+  });
 }
 
-// HANDLERS IPC
+// HANDLERS IPC PARA PYTHON
+ipcMain.handle(
+  "python:query",
+  async (_event: IpcMainInvokeEvent, payload: any): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const pythonPath = isDev
+        ? "python"
+        : path.join(process.resourcesPath, "backend", "app.exe");
+
+      const args = isDev ? [path.join(process.cwd(), "backend", "app.py")] : [];
+
+      const py = spawn(pythonPath, args);
+
+      let data = "";
+      let errorData = "";
+
+      py.stdout.on("data", (chunk) => {
+        const text = chunk.toString();
+        data += text;
+      });
+
+      py.stderr.on("data", (chunk) => {
+        errorData += chunk.toString();
+        console.error("ERRO NO PYTHON:", chunk.toString());
+      });
+
+      py.stdin.write(JSON.stringify(payload));
+      py.stdin.end();
+
+      py.on("close", (code) => {
+        if (code === 0) {
+          resolve(data.trim() || "[]");
+        } else {
+          reject(`Erro no Backend (Código ${code}): ${errorData}`);
+        }
+      });
+
+      py.on("error", (err) => {
+        reject(`Falha ao iniciar processo Python: ${err.message}`);
+      });
+    });
+  },
+);
+
 ipcMain.handle("dialog:openFile", async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ["openFile"],
@@ -90,47 +161,18 @@ ipcMain.handle("dialog:openFile", async () => {
   return canceled ? null : filePaths[0];
 });
 
-ipcMain.handle(
-  "python:query",
-  async (_event: IpcMainInvokeEvent, payload: any): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const pythonScriptPath = isDev
-        ? path.join(process.cwd(), "backend", "app.py")
-        : path.join(process.resourcesPath, "backend", "app.py");
-
-      const py = spawn("python", [pythonScriptPath, JSON.stringify(payload)], {
-        cwd: isDev ? process.cwd() : process.resourcesPath,
-        shell: false,
-      });
-
-      let data = "";
-      let errorData = "";
-
-      py.stdout.on("data", (chunk) => (data += chunk.toString()));
-      py.stderr.on("data", (chunk) => (errorData += chunk.toString()));
-
-      py.on("close", (code) => {
-        if (code === 0) resolve(data);
-        else reject(`Erro Python (${code}): ${errorData}`);
-      });
-    });
-  },
-);
-
 app.whenReady().then(() => {
-  // Protocolo para carregar as capas direto da pasta do projeto
   protocol.registerFileProtocol("capas", (request, callback) => {
     const url = decodeURIComponent(
       request.url.replace(/^capas:\/\//, "").replace(/\/$/, ""),
     );
 
-    // Constrói o caminho dinâmico baseado no ambiente
     const pathCapa = path.join(
       isDev ? process.cwd() : process.resourcesPath,
       "frontend",
       "public",
       "img",
-      decodeURIComponent(url),
+      url,
     );
 
     callback({ path: path.normalize(pathCapa) });

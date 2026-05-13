@@ -9,11 +9,14 @@
     "dev:vue": "npm run dev --prefix frontend",
     "dev:electron": "electron --import=tsx .",
     "dev": "concurrently --kill-others \"npm run dev:vue\" \"npm run dev:electron\"",
-    "build": "npm run build:vue && electron-builder",
-    "build:clear": "rd /s /q dist_electron && npm run build:vue && electron-builder",
+    "start:prod": "start .\\dist_electron\\win-unpacked\\\"Gerenciador de Mangás.exe\"",
+    "clean:power": "taskkill /F /IM \"Gerenciador de Mangás.exe\" /T /FI \"STATUS eq RUNNING\" & taskkill /F /IM electron.exe /T",
     "build:vue": "npm run build --prefix frontend",
-    "start:prod": "start .\\dist_electron\\win-unpacked\\Gerenciador de Mangás.exe",
-    "clean:power": "taskkill /F /IM Gerenciador de Mangás.exe /T /FI \"STATUS eq RUNNING\" & taskkill /F /IM Gerenciador de Mangás.exe /T /FI \"STATUS eq UNKNOWN\" & taskkill /F /IM electron.exe /T"
+    "build": "npm run build:py && npm run build:vue && electron-builder",
+    "build:clear": "rimraf dist_electron && npm run build",
+    "build:py": "pyinstaller --noconfirm --onefile --windowed --distpath ./backend/dist ./backend/app.py",
+    "clean:backend": "rimraf backend/dist && rimraf backend/build && rimraf backend/app.spec",
+    "build:full": "npm run clean:backend && npm run build:clear"
   },
   "build": {
     "appId": "com.seuprojeto.gerenciadormangas",
@@ -22,17 +25,21 @@
       "output": "dist_electron"
     },
     "files": [
-      "dist-electron/**/*",
       "electron/**/*",
       "frontend/dist/**/*"
     ],
     "extraResources": [
       {
-        "from": "backend",
-        "to": "backend",
-        "filter": [
-          "**/*"
-        ]
+        "from": "backend/dist/app.exe",
+        "to": "backend/app.exe"
+      },
+      {
+        "from": "backend/data",
+        "to": "backend/data"
+      },
+      {
+        "from": "frontend/public/img",
+        "to": "frontend/public/img"
       }
     ],
     "win": {
@@ -49,5 +56,13 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Gerenciador de Mangas"
     }
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "concurrently": "^9.1.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.19.0"
   }
 }
