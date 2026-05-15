@@ -1,11 +1,12 @@
 <script setup lang="ts">
-// Definimos as propriedades que o card recebe
-defineProps<{
+import { ref, onMounted, watch } from "vue";
+
+// Captura as props em uma constante
+const props = defineProps<{
   manga: any;
   isDragging?: boolean;
 }>();
 
-// Definimos os eventos que o card pode disparar para o App.vue
 const emit = defineEmits([
   "mudarStatus",
   "abrirModal",
@@ -16,7 +17,35 @@ const emit = defineEmits([
 
 const api = (window as any).api;
 
-// Handlers locais para emitir os eventos
+// Estado reativo para armazenar o caminho da capa
+const capaSrc = ref("");
+
+// Função isolada para carregar a imagem
+const carregarCapa = async () => {
+  if (!props.manga.capa) {
+    capaSrc.value = "./img/default.jpg";
+    return;
+  }
+
+  if (
+    props.manga.capa.startsWith("capa_") ||
+    props.manga.capa.startsWith("manga_")
+  ) {
+    // Agora pegamos a string Base64 direta
+    const res = await api.getCapaBase64(props.manga.capa);
+    capaSrc.value = res || "./img/default.jpg";
+  } else {
+    capaSrc.value = `./img/${props.manga.capa}`;
+  }
+};
+
+// Carrega ao montar o componente
+onMounted(carregarCapa);
+
+// Se o nome da capa mudar (ex: após uma edição), atualiza a imagem automaticamente
+watch(() => props.manga.capa, carregarCapa);
+
+// Handlers locais
 const handleStatus = (id: number, status: string) =>
   emit("mudarStatus", id, status);
 const handleEdit = (manga: any) => emit("abrirModal", manga);
@@ -25,62 +54,58 @@ const handleEdit = (manga: any) => emit("abrirModal", manga);
 <template>
   <div
     class="card"
-    :class="{ dragging: isDragging }"
+    :class="{ dragging: props.isDragging }"
     draggable="true"
     @dragstart="emit('dragStart')"
     @dragover.prevent
     @drop="emit('drop')"
     @dragend="emit('dragEnd')"
   >
-    <!-- Tag de Status -->
     <div
       :class="[
         'status-tag',
-        manga.status
+        props.manga.status
           .toLowerCase()
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '')
           .replace(' ', ''),
       ]"
     >
-      {{ manga.status }}
+      {{ props.manga.status }}
     </div>
 
-    <!-- Imagem com o Protocolo Customizado -->
-    <img
-      :src="
-        manga.capa.startsWith('capa_') || manga.capa.startsWith('manga_')
-          ? `capas://${manga.capa}`
-          : `./img/${manga.capa}`
-      "
-      class="capa-manga"
-    />
+    <img :src="capaSrc" class="capa-manga" loading="lazy" />
 
-    <h3>{{ manga.nome_pt }}</h3>
-    <small>{{ manga.nome_en }}</small>
-    <p>
-      Capítulo: <strong>{{ manga.capitulo }}</strong>
-    </p>
+    <div class="info-container">
+      <h3>{{ props.manga.nome_pt }}</h3>
+      <small>{{ props.manga.nome_en }}</small>
+      <p>
+        Capítulo: <strong>{{ props.manga.capitulo }}</strong>
+      </p>
+    </div>
 
-    <!-- Rodapé -->
     <div class="card-footer">
       <a
-        :href="manga.link"
+        :href="props.manga.link"
         class="btn-ler"
-        @click.prevent="api.openLink(manga.link)"
+        @click.prevent="api.openLink(props.manga.link)"
       >
         Ler
       </a>
 
       <button
-        @click="handleStatus(manga.id, manga.status)"
+        @click="handleStatus(props.manga.id, props.manga.status)"
         class="btn-icon"
         title="Trocar Status"
       >
         🔄
       </button>
 
-      <button @click="handleEdit(manga)" class="btn-icon" title="Editar Dados">
+      <button
+        @click="handleEdit(props.manga)"
+        class="btn-icon"
+        title="Editar Dados"
+      >
         ⚙️
       </button>
     </div>

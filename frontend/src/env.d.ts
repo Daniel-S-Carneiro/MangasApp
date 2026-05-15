@@ -7,6 +7,7 @@ declare global {
       selecionarArquivo: () => Promise<string[]>;
       openLink: (url: string) => Promise<void>;
       onLog: (callback: (message: string) => void) => void;
+      onAlertLink: (callback: (mensagem: string) => void) => void;
     };
   }
   // Esta linha é CRUCIAL para o erro no <template> sumir

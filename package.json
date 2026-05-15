@@ -6,10 +6,11 @@
   "type": "module",
   "main": "electron/main.ts",
   "scripts": {
+    "start:prod": "cross-env \"dist_electron\\win-unpacked\\Gerenciador de Mangás.exe\"",
+    "start:prod-debug": "cross-env DEBUG_PROD=true \"dist_electron\\win-unpacked\\Gerenciador de Mangás.exe\"",
     "dev:vue": "npm run dev --prefix frontend",
     "dev:electron": "electron --import=tsx .",
     "dev": "concurrently --kill-others \"npm run dev:vue\" \"npm run dev:electron\"",
-    "start:prod": "start .\\dist_electron\\win-unpacked\\\"Gerenciador de Mangás.exe\"",
     "clean:power": "taskkill /F /IM \"Gerenciador de Mangás.exe\" /T /FI \"STATUS eq RUNNING\" & taskkill /F /IM electron.exe /T",
     "build:vue": "npm run build --prefix frontend",
     "build": "npm run build:py && npm run build:vue && electron-builder",
@@ -60,9 +61,13 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "concurrently": "^9.1.0",
-    "electron": "^33.0.0",
-    "electron-builder": "^25.1.8",
-    "rimraf": "^6.0.1",
+    "cross-env": "^10.1.0",
+    "electron": "^42.0.1",
+    "electron-builder": "^26.8.1",
+    "rimraf": "^6.1.3",
     "tsx": "^4.19.0"
+  },
+  "dependencies": {
+    "glob": "^13.0.6"
   }
 }

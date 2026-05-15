@@ -14,6 +14,10 @@ const draggedItem = ref<any>(null);
 const exibirConfirmacao = ref(false);
 const idParaExcluir = ref<number | null>(null);
 
+// 🔔 Novo estado para alerta de link inválido
+const exibirAlertaLink = ref(false);
+const mensagemAlertaLink = ref("");
+
 const mangasFiltrados = computed(() => {
   return listaMangas.value.filter((i) =>
     i.nome_pt.toLowerCase().includes(filtro.value.toLowerCase()),
@@ -55,7 +59,6 @@ async function listarMangas() {
     listaMangas.value = JSON.parse(validJson);
   } catch (error) {
     console.error("Erro ao listar mangás:", error);
-    // Agora o catch consegue acessar a variável 'response' definida lá no topo
     console.warn("Falha no parse. Resposta bruta recebida:", response);
   }
 }
@@ -110,12 +113,17 @@ async function onDrop(target: any) {
   draggedItem.value = null;
 }
 
-// onMounted(listarMangas);
 onMounted(() => {
   listarMangas();
 
   window.api.onLog((message: string) => {
-    console.log(message); // aparece no DevTools → Console
+    console.log(message);
+  });
+
+  // 🔔 Escuta os avisos de link inválido vindos do main.ts
+  window.api.onAlertLink((mensagem: string) => {
+    mensagemAlertaLink.value = mensagem;
+    exibirAlertaLink.value = true;
   });
 });
 </script>
@@ -167,6 +175,7 @@ onMounted(() => {
     "
   />
 
+  <!-- Modal de confirmação de exclusão -->
   <div v-if="exibirConfirmacao" class="modal-overlay">
     <div class="modal-card">
       <h3>⚠️ Atenção</h3>
@@ -178,6 +187,17 @@ onMounted(() => {
         <button @click="exibirConfirmacao = false" class="btn-cancel">
           Cancelar
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔔 Novo modal de alerta de link inválido -->
+  <div v-if="exibirAlertaLink" class="modal-overlay">
+    <div class="modal-card">
+      <h3>⚠️ Atenção</h3>
+      <p>{{ mensagemAlertaLink }}</p>
+      <div class="modal-buttons">
+        <button @click="exibirAlertaLink = false" class="btn-cancel">Ok</button>
       </div>
     </div>
   </div>
