@@ -70,15 +70,33 @@ function toggleTheme() {
 
 async function mudarStatus(id: number, atual: string) {
   const ordem = ["Lendo", "Concluído", "Pausado"];
-  const novo = ordem[(ordem.indexOf(atual) + 1) % ordem.length];
+
+  // Normaliza e limpa o texto vindo do Python para garantir a comparação
+  const statusNormalizado = atual.trim().normalize("NFC"); // Tenta reconstruir caracteres quebrados
+
+  // Procura o índice. Se não achar por causa do encoding, tenta por aproximação
+  let indexAtual = ordem.indexOf(statusNormalizado);
+
+  if (indexAtual === -1) {
+    if (statusNormalizado.includes("Lendo")) indexAtual = 0;
+    else if (
+      statusNormalizado.includes("Conclu") ||
+      statusNormalizado.includes("conclu")
+    )
+      indexAtual = 1;
+    else if (statusNormalizado.includes("Pausado")) indexAtual = 2;
+  }
+
+  const proximoIndex = (indexAtual + 1) % ordem.length;
+  const novo = ordem[proximoIndex];
+
   try {
     await window.api.callPython({ action: "update_status", id, status: novo });
     listarMangas();
   } catch (error) {
-    alert("ERRO NO BACKEND (Status): " + error);
+    console.error("Erro ao mudar status:", error);
   }
 }
-
 function abrirModal(manga: any) {
   mangaParaEditar.value = { ...manga };
   isModalOpen.value = true;

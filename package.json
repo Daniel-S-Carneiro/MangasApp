@@ -17,7 +17,9 @@
     "build:clear": "rimraf dist_electron && npm run build",
     "build:py": "pyinstaller --noconfirm --onefile --windowed --distpath ./backend/dist ./backend/app.py",
     "clean:backend": "rimraf backend/dist && rimraf backend/build && rimraf backend/app.spec",
-    "build:full": "npm run clean:backend && npm run build:clear"
+    "build:release": "npm run build:py && npm run build:vue && electron-builder --config electron-builder.release.json",
+    "build:full": "npm run clean:backend && npm run build:clear",
+    "build:full-release": "npm run clean:backend && rimraf dist_electron_release && npm run build:release"
   },
   "build": {
     "appId": "com.seuprojeto.gerenciadormangas",

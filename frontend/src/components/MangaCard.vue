@@ -64,14 +64,15 @@ const handleEdit = (manga: any) => emit("abrirModal", manga);
     <div
       :class="[
         'status-tag',
-        props.manga.status
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(' ', ''),
+        props.manga.status.toLowerCase().includes('lendo') ? 'lendo' : '',
+        props.manga.status.toLowerCase().includes('conclu') ||
+        props.manga.status.includes('Ã')
+          ? 'concluido'
+          : '',
+        props.manga.status.toLowerCase().includes('pausado') ? 'pausado' : '',
       ]"
     >
-      {{ props.manga.status }}
+      {{ props.manga.status.includes("Ã") ? "Concluído" : props.manga.status }}
     </div>
 
     <img :src="capaSrc" class="capa-manga" loading="lazy" />

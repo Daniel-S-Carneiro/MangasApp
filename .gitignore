@@ -23,6 +23,7 @@ __pycache__/
 # --- Build e Distribuição ---
 dist/
 dist_electron/
+dist_electron_release/
 frontend/dist/
 frontend/dist-ssr/
 

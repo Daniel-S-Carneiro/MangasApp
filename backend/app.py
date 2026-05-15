@@ -9,6 +9,11 @@ import sqlite3
 import os
 import shutil
 import uuid
+import io
+
+# Força o stdout a usar UTF-8 para que o Electron receba os acentos corretamente
+if sys.stdout.encoding != "utf-8":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 # --- CONFIGURAÇÃO DE CAMINHOS ---
 if getattr(sys, "frozen", False):
@@ -25,8 +30,10 @@ os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
 
 def send_response(data):
-    """Envia apenas o JSON para o stdout e garante que nada mais saia junto."""
-    sys.stdout.write(json.dumps(data) + "\n")
+    """Envia o JSON garantindo que caracteres acentuados não sejam escapados."""
+    # O ensure_ascii=False mantém o "í" como "í" em vez de "\u00ed"
+    json_output = json.dumps(data, ensure_ascii=False)
+    sys.stdout.write(json_output + "\n")
     sys.stdout.flush()
 
 
@@ -34,6 +41,8 @@ def main():
     """Função principal que gerencia as operações do banco de dados e integra com o Electron."""
     try:
         conn = sqlite3.connect(db_path)
+        # Força o retorno de strings em vez de bytes (ajuda com encoding)
+        conn.text_factory = str
         cur = conn.cursor()
     except sqlite3.Error as e:
         send_response({"error": f"Erro de conexão DB: {str(e)}"})
