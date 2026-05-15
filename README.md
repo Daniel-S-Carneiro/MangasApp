@@ -14,10 +14,17 @@ Um gestor de mangás desktop construído com **Electron**, **Vue.js 3** e **Pyth
 - **Backend:** Python (Scripts de processamento de dados).
 
 ## 📦 Como Instalar e Rodar
-1. Clone o repositório: `git clone https://github.com/teu-utilizador/manga-manager.git`
-2. Instale as dependências do frontend: `npm install`
-3. Instale as dependências do Python (se houver).
-4. Inicie o projeto: `npm run dev`
+1. Clone o repositório:
+   `git clone https://github.com/SEU_USUARIO/MangasApp.git`
+2. Instale as dependências do projeto (Electron - raiz):
+   `npm install`
+3. Instale as dependências do frontend:
+   `cd frontend && npm install`
+4. Retorne à raiz do projeto:
+   `cd ..`
+5. Instale as dependências do Python (se necessário).
+6. Inicie o projeto:
+   `npm run dev`
 
 ## 📄 Licença
 Este projeto está sob a licença MIT - veja o ficheiro [LICENSE](LICENSE) para detalhes.
