@@ -1,21 +1,22 @@
-"""
-Manga Manager Backend
-Gerencia o banco de dados SQLite e integração de imagens para o Electron.
+"""Manga Manager Backend.
+
+Gerencia o banco de dados SQLite e a integração de imagens para o Electron.
 """
 
-import sys
+import io
 import json
-import sqlite3
 import os
 import shutil
+import sqlite3
+import sys
 import uuid
-import io
 
-# Força o stdout a usar UTF-8 para que o Electron receba os acentos corretamente
 if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
-# --- CONFIGURAÇÃO DE CAMINHOS ---
+if sys.stdin.encoding != "utf-8":
+    sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8")
+
 if getattr(sys, "frozen", False):
     BASE_DIR = os.path.dirname(sys.executable)
     IMG_DIR = os.path.join(os.path.dirname(BASE_DIR), "frontend", "public", "img")
@@ -31,18 +32,16 @@ os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
 def send_response(data):
     """Envia o JSON garantindo que caracteres acentuados não sejam escapados."""
-    # O ensure_ascii=False mantém o "í" como "í" em vez de "\u00ed"
     json_output = json.dumps(data, ensure_ascii=False)
     sys.stdout.write(json_output + "\n")
     sys.stdout.flush()
 
 
 def main():
-    """Função principal que gerencia as operações do banco de dados e integra com o Electron."""
+    """Gerencia as operações do banco de dados e integração com o Electron."""
     try:
         conn = sqlite3.connect(db_path)
-        # Força o retorno de strings em vez de bytes (ajuda com encoding)
-        conn.text_factory = str
+        conn.text_factory = lambda b: str(b, "utf-8", "ignore")
         cur = conn.cursor()
     except sqlite3.Error as e:
         send_response({"error": f"Erro de conexão DB: {str(e)}"})
@@ -63,7 +62,7 @@ def main():
     conn.commit()
 
     try:
-        input_data = sys.stdin.read().strip()
+        input_data = sys.stdin.readline().strip()
         if not input_data:
             send_response([])
             return
@@ -99,10 +98,27 @@ def main():
             )
 
             conn.commit()
-            send_response({"status": "OK", "capa": nome_final_capa})
+            new_id = cur.lastrowid
+            send_response({"status": "OK", "capa": nome_final_capa, "id": new_id})
 
         elif action == "list":
-            cur.execute("SELECT * FROM mangas ORDER BY ordem ASC")
+            limite = payload.get("limite", 20)
+            pagina = payload.get("pagina", 1)
+            filtro_texto = payload.get("filtro", "").strip()
+
+            offset = (pagina - 1) * limite
+
+            if filtro_texto:
+                query = (
+                    "SELECT * FROM mangas "
+                    "WHERE nome_pt LIKE ? "
+                    "ORDER BY ordem ASC LIMIT ? OFFSET ?"
+                )
+                cur.execute(query, (f"%{filtro_texto}%", limite, offset))
+            else:
+                query = "SELECT * FROM mangas ORDER BY ordem ASC LIMIT ? OFFSET ?"
+                cur.execute(query, (limite, offset))
+
             rows = cur.fetchall()
             results = [
                 {
@@ -133,7 +149,7 @@ def main():
         elif action == "update_status":
             cur.execute(
                 "UPDATE mangas SET status = ? WHERE id = ?",
-                (payload["status"], payload["id"]),
+                (payload.get("status"), payload.get("id")),
             )
             conn.commit()
             send_response({"status": "OK"})
@@ -147,12 +163,38 @@ def main():
             send_response({"status": "OK"})
 
         elif action == "update_full":
+            manga_id = payload.get("id")
+            novo_capitulo = payload.get("capitulo")
+            novo_link = payload.get("link")
+            origem_capa = payload.get("caminho_completo")
+            capa_atual = payload.get("capa")
+
+            nome_final_capa = capa_atual
+
+            if origem_capa and os.path.exists(origem_capa):
+                try:
+                    cur.execute("SELECT capa FROM mangas WHERE id = ?", (manga_id,))
+                    res_antigo = cur.fetchone()
+                    if res_antigo and res_antigo[0] != "default.jpg":
+                        path_antigo = os.path.join(IMG_DIR, res_antigo[0])
+                        if os.path.exists(path_antigo):
+                            os.remove(path_antigo)
+
+                    extensao = os.path.splitext(origem_capa)[1]
+                    nome_final_capa = f"capa_{uuid.uuid4().hex}{extensao}"
+                    shutil.copy2(origem_capa, os.path.join(IMG_DIR, nome_final_capa))
+                except Exception:  # pylint: disable=broad-exception-caught
+                    nome_final_capa = "default.jpg"
+
             cur.execute(
-                "UPDATE mangas SET capitulo = ?, link = ? WHERE id = ?",
-                (payload.get("capitulo"), payload.get("link"), payload.get("id")),
+                "UPDATE mangas SET capitulo = ?, link = ?, capa = ? WHERE id = ?",
+                (novo_capitulo, novo_link, nome_final_capa, manga_id),
             )
             conn.commit()
-            send_response({"status": "OK"})
+            send_response({"status": "OK", "capa": nome_final_capa})
+
+        else:
+            send_response({"error": f"Ação desconhecida: {action}"})
 
     except (json.JSONDecodeError, sqlite3.Error) as e:
         send_response({"error": str(e)})

@@ -9,7 +9,7 @@ import {
 } from "electron";
 
 import { spawn } from "child_process";
-import { fileURLToPath, pathToFileURL } from "url";
+import { fileURLToPath } from "url";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -20,12 +20,6 @@ const __dirname = path.dirname(__filename);
 const isDev = !app.isPackaged;
 const ENABLE_PROD_DEBUG = process.env.DEBUG_PROD === "true";
 const ENABLE_DEBUG_LOGS = false;
-const pythonPath = isDev
-  ? "python"
-  : path.join(process.resourcesPath, "backend", "app.exe");
-const imgDir = isDev
-  ? path.join(process.cwd(), "frontend", "public", "img")
-  : path.join(process.resourcesPath, "frontend", "public", "img");
 
 protocol.registerSchemesAsPrivileged([
   {

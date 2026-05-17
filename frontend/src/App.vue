@@ -1,28 +1,110 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import MangaForm from "./components/MangaForm.vue";
 import MangaModal from "./components/MangaModal.vue";
 import MangaCard from "./components/MangaCard.vue";
 
-const listaMangas = ref<any[]>([]);
+interface Manga {
+  id: number;
+  nome_pt: string;
+  nome_en: string;
+  capitulo: number;
+  link: string;
+  capa: string;
+  status: string;
+  ordem: number;
+}
+
+const listaMangas = ref<Manga[]>([]);
 const filtro = ref("");
 const isFormOpen = ref(false);
 const isModalOpen = ref(false);
 const darkTheme = ref(true);
-const mangaParaEditar = ref<any>(null);
-const draggedItem = ref<any>(null);
+const mangaParaEditar = ref<Manga | null>(null);
+const draggedItem = ref<Manga | null>(null);
 const exibirConfirmacao = ref(false);
 const idParaExcluir = ref<number | null>(null);
+const paginaAtual = ref(1);
+const limitePorPagina = 20;
+const temMaisMangas = ref(true);
 
-// 🔔 Novo estado para alerta de link inválido
 const exibirAlertaLink = ref(false);
 const mensagemAlertaLink = ref("");
 
-const mangasFiltrados = computed(() => {
-  return listaMangas.value.filter((i) =>
-    i.nome_pt.toLowerCase().includes(filtro.value.toLowerCase()),
-  );
+// Filtro processado no banco de dados; a propriedade computada repassa a lista atualizada
+const mangasExibidos = computed(() => listaMangas.value);
+
+// Bloqueia a ordenação por arrasto (drag and drop) se houver filtro de texto ativo
+const isDraggableActive = computed(() => filtro.value.trim() === "");
+
+async function listarMangas(novaPagina = 1, append = false) {
+  try {
+    const response = await window.api.callPython({
+      action: "list",
+      limite: limitePorPagina,
+      pagina: novaPagina,
+      filtro: filtro.value,
+    });
+
+    let validJson = response.trim();
+    if (validJson.includes("][")) {
+      validJson = validJson.split("][")[0] + "]";
+    }
+
+    const novosMangas = JSON.parse(validJson);
+
+    // Define o estado da paginação com base no volume de dados retornado
+    if (novosMangas.length < limitePorPagina) {
+      temMaisMangas.value = false;
+    } else {
+      temMaisMangas.value = true;
+    }
+
+    if (append) {
+      // Adiciona os novos itens ao fim da lista existente (Scroll infinito / Carregar mais)
+      listaMangas.value.push(...novosMangas);
+      paginaAtual.value = novaPagina;
+    } else {
+      // Substitui a lista completa (Carregamento inicial ou nova pesquisa)
+      listaMangas.value = novosMangas;
+      paginaAtual.value = 1;
+    }
+  } catch (error) {
+    console.error("Erro ao listar mangás:", error);
+  }
+}
+
+// Watcher com debounce para otimizar as requisições de busca ao backend
+let timeoutFiltro: number;
+watch(filtro, () => {
+  clearTimeout(timeoutFiltro);
+  timeoutFiltro = window.setTimeout(() => {
+    listarMangas(1, false);
+  }, 300);
 });
+
+function carregarProximaPagina() {
+  if (!temMaisMangas.value) return;
+  listarMangas(paginaAtual.value + 1, true);
+}
+
+async function adicionarManga(novoManga: Manga) {
+  draggedItem.value = null;
+  isFormOpen.value = false;
+
+  // Consulta o banco de dados para sincronizar o estado oficial da lista
+  try {
+    await listarMangas();
+  } catch (error) {
+    listaMangas.value.push(novoManga);
+    console.error("Erro ao sincronizar nova lista:", error);
+  }
+}
+
+function atualizarManga() {
+  isModalOpen.value = false;
+  listarMangas(1, false);
+}
 
 function pedirExclusao(id: number) {
   idParaExcluir.value = id;
@@ -32,77 +114,54 @@ function pedirExclusao(id: number) {
 async function confirmarExclusao() {
   if (idParaExcluir.value === null) return;
 
+  const index = listaMangas.value.findIndex(
+    (m) => m.id === idParaExcluir.value,
+  );
+  if (index === -1) return;
+
+  const backup = listaMangas.value[index];
+  listaMangas.value.splice(index, 1);
+  exibirConfirmacao.value = false;
+  isModalOpen.value = false;
+
   try {
     await window.api.callPython({ action: "delete", id: idParaExcluir.value });
-    exibirConfirmacao.value = false;
     idParaExcluir.value = null;
-    listarMangas();
   } catch (error) {
+    listaMangas.value.splice(index, 0, backup);
     console.error("Erro ao excluir:", error);
-    alert("ERRO NO BACKEND (Delete): " + error);
   }
-}
-
-async function listarMangas() {
-  let response = ""; // Declaramos aqui fora para o catch poder acessar
-
-  try {
-    response = await window.api.callPython({ action: "list" });
-
-    let validJson = response.trim();
-
-    // Se por acaso o Python mandar lixo no final, limpamos
-    if (validJson.includes("][")) {
-      validJson = validJson.split("][")[0] + "]";
-    }
-
-    listaMangas.value = JSON.parse(validJson);
-  } catch (error) {
-    console.error("Erro ao listar mangás:", error);
-    console.warn("Falha no parse. Resposta bruta recebida:", response);
-  }
-}
-
-function toggleTheme() {
-  darkTheme.value = !darkTheme.value;
-  document.body.classList.toggle("light-mode", !darkTheme.value);
 }
 
 async function mudarStatus(id: number, atual: string) {
-  const ordem = ["Lendo", "Concluído", "Pausado"];
+  const ordemStatus = ["Lendo", "Concluído", "Pausado"];
+  const indexAtual =
+    ordemStatus.indexOf(atual) !== -1 ? ordemStatus.indexOf(atual) : 0;
+  const proximoIndex = (indexAtual + 1) % ordemStatus.length;
+  const novo = ordemStatus[proximoIndex];
 
-  // Normaliza e limpa o texto vindo do Python para garantir a comparação
-  const statusNormalizado = atual.trim().normalize("NFC"); // Tenta reconstruir caracteres quebrados
+  const item = listaMangas.value.find((m) => m.id === id);
+  if (!item) return;
 
-  // Procura o índice. Se não achar por causa do encoding, tenta por aproximação
-  let indexAtual = ordem.indexOf(statusNormalizado);
-
-  if (indexAtual === -1) {
-    if (statusNormalizado.includes("Lendo")) indexAtual = 0;
-    else if (
-      statusNormalizado.includes("Conclu") ||
-      statusNormalizado.includes("conclu")
-    )
-      indexAtual = 1;
-    else if (statusNormalizado.includes("Pausado")) indexAtual = 2;
-  }
-
-  const proximoIndex = (indexAtual + 1) % ordem.length;
-  const novo = ordem[proximoIndex];
+  const backup = item.status;
+  item.status = novo;
 
   try {
     await window.api.callPython({ action: "update_status", id, status: novo });
-    listarMangas();
   } catch (error) {
+    item.status = backup;
     console.error("Erro ao mudar status:", error);
   }
 }
-function abrirModal(manga: any) {
-  mangaParaEditar.value = { ...manga };
+
+function abrirModal(manga: Manga) {
+  // Passa a referência direta do objeto para mutação reativa no componente filho
+  mangaParaEditar.value = manga;
   isModalOpen.value = true;
 }
 
-function onDragStart(manga: any) {
+function onDragStart(manga: Manga) {
+  if (!isDraggableActive.value) return;
   draggedItem.value = manga;
 }
 
@@ -110,15 +169,26 @@ function onDragEnd() {
   draggedItem.value = null;
 }
 
-async function onDrop(target: any) {
-  if (!draggedItem.value || draggedItem.value.id === target.id) return;
-  const oldIdx = listaMangas.value.findIndex(
-    (m) => m.id === draggedItem.value.id,
-  );
+async function onDrop(target: Manga) {
+  const dragged = draggedItem.value;
+  if (!dragged || dragged.id === target.id) {
+    draggedItem.value = null;
+    return;
+  }
+
+  const backup = [...listaMangas.value];
+  const oldIdx = listaMangas.value.findIndex((m) => m.id === dragged.id);
   const newIdx = listaMangas.value.findIndex((m) => m.id === target.id);
 
   listaMangas.value.splice(oldIdx, 1);
-  listaMangas.value.splice(newIdx, 0, draggedItem.value);
+  listaMangas.value.splice(newIdx, 0, dragged);
+
+  listaMangas.value.forEach((m, index) => {
+    m.ordem = index;
+  });
+
+  // Reseta o estado visual do arrasto antes da resolução da API para otimizar a interface
+  draggedItem.value = null;
 
   try {
     await window.api.callPython({
@@ -126,23 +196,26 @@ async function onDrop(target: any) {
       order_list: listaMangas.value.map((m) => m.id),
     });
   } catch (error) {
-    alert("ERRO NO BACKEND (Ordem): " + error);
+    listaMangas.value = backup;
+    console.error("Erro ao salvar ordem:", error);
   }
-  draggedItem.value = null;
+}
+
+function toggleTheme() {
+  darkTheme.value = !darkTheme.value;
+  localStorage.setItem("theme", darkTheme.value ? "dark" : "light");
+  document.body.classList.toggle("light-mode", !darkTheme.value);
 }
 
 onMounted(() => {
   listarMangas();
-
-  window.api.onLog((message: string) => {
-    console.log(message);
-  });
-
-  // 🔔 Escuta os avisos de link inválido vindos do main.ts
+  window.api.onLog((message: string) => console.log(message));
   window.api.onAlertLink((mensagem: string) => {
     mensagemAlertaLink.value = mensagem;
     exibirAlertaLink.value = true;
   });
+  darkTheme.value = localStorage.getItem("theme") !== "light";
+  document.body.classList.toggle("light-mode", !darkTheme.value);
 });
 </script>
 
@@ -157,20 +230,15 @@ onMounted(() => {
     <input type="text" v-model="filtro" placeholder="🔍 Pesquisar..." />
   </div>
 
-  <MangaForm
-    :isOpen="isFormOpen"
-    @saved="
-      isFormOpen = false;
-      listarMangas();
-    "
-  />
+  <MangaForm :isOpen="isFormOpen" @saved="adicionarManga" />
 
   <div class="grid">
     <MangaCard
-      v-for="m in mangasFiltrados"
+      v-for="m in mangasExibidos"
       :key="m.id"
       :manga="m"
       :isDragging="draggedItem?.id === m.id"
+      :draggable="isDraggableActive"
       @mudarStatus="mudarStatus"
       @abrirModal="abrirModal"
       @dragStart="onDragStart(m)"
@@ -179,21 +247,20 @@ onMounted(() => {
     />
   </div>
 
+  <div v-if="temMaisMangas" class="load-more-container">
+    <button @click="carregarProximaPagina" class="btn-load-more">
+      📥 Carregar Mais Mangás
+    </button>
+  </div>
+
   <MangaModal
     :isOpen="isModalOpen"
     :manga="mangaParaEditar"
     @close="isModalOpen = false"
-    @save="
-      listarMangas();
-      isModalOpen = false;
-    "
-    @delete="
-      isModalOpen = false;
-      pedirExclusao(mangaParaEditar.id);
-    "
+    @save="atualizarManga"
+    @delete="mangaParaEditar ? pedirExclusao(mangaParaEditar.id) : null"
   />
 
-  <!-- Modal de confirmação de exclusão -->
   <div v-if="exibirConfirmacao" class="modal-overlay">
     <div class="modal-card">
       <h3>⚠️ Atenção</h3>
@@ -209,7 +276,6 @@ onMounted(() => {
     </div>
   </div>
 
-  <!-- 🔔 Novo modal de alerta de link inválido -->
   <div v-if="exibirAlertaLink" class="modal-overlay">
     <div class="modal-card">
       <h3>⚠️ Atenção</h3>
@@ -220,3 +286,155 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* --- Layout Estrutural da Página (grid.css & base.css) --- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.controls input[type="text"] {
+  padding: 10px;
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-size: 1rem;
+}
+
+/* --- Botões de Controle Principal --- */
+.btn-theme,
+.btn-toggle,
+.btn-delete,
+.btn-cancel {
+  padding: 10px 15px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.btn-theme {
+  background: #6c5ce7;
+  color: white;
+}
+
+.btn-toggle {
+  background: #333;
+  color: white;
+  border: 1px solid var(--border);
+}
+
+/* --- Seção de Paginação (Carregar Mais) --- */
+.load-more-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 20px 0 40px 0;
+  box-sizing: border-box;
+}
+
+.btn-load-more {
+  margin: 0;
+  box-sizing: border-box;
+  padding: 10px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  background: #252525;
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-size: 0.95em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.1s ease;
+}
+
+.btn-load-more:hover {
+  background: #333333;
+  border-color: #444444;
+}
+
+.btn-load-more:active {
+  background: #1a1a1a;
+  transform: scale(0.98);
+}
+
+.btn-load-more:focus-visible {
+  outline: 2px solid #007acc;
+  outline-offset: 2px;
+}
+
+/* --- Modais Locais de Confirmação e Alertas do App --- */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.modal-card {
+  background: #1e1e1e;
+  padding: 30px;
+  border-radius: 15px;
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+  border: 1px solid #333;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.modal-card h3 {
+  margin-bottom: 20px;
+  font-size: 1.3em;
+  color: var(--text);
+}
+
+.modal-card p {
+  color: #ccc;
+  margin-bottom: 20px;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.modal-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 25px;
+}
+
+.btn-delete {
+  background: #e74c3c;
+  color: white;
+}
+
+.btn-cancel {
+  background: #555;
+  color: white;
+}
+</style>
