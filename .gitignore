@@ -23,7 +23,6 @@ __pycache__/
 # --- Build e Distribuição ---
 dist/
 dist_electron/
-dist_electron_release/
 frontend/dist/
 frontend/dist-ssr/
 
@@ -35,11 +34,14 @@ backend/data/*.db-shm
 backend/data/*.db-wal
 
 # --- Build Backend ---
-backend/dist/app.exe
-backend/app.exe
+# Ignora a pasta inteira gerada pelo build (--onedir), incluindo o exe e a pasta _internal
+backend/app/
+backend/dist/
 backend/build/
 build/app/
+backend/app.spec
 app.spec
+backend/app.exe
 
 # --- Imagens e Capas ---
 # Ignora as capas baixadas para não subir imagens com direitos autorais

@@ -1,6 +1,8 @@
 {
   "name": "project-electron-vue-python",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "description": "Gerenciador de Mangás com Electron, Vue e Python",
+  "author": "Daniel S. Carneiro",
   "productName": "Gerenciador de Mangás",
   "private": true,
   "type": "module",
@@ -10,20 +12,20 @@
     "start:prod-debug": "cross-env DEBUG_PROD=true \"dist_electron\\win-unpacked\\Gerenciador de Mangás.exe\"",
     "dev:vue": "npm run dev --prefix frontend",
     "dev:electron": "electron --import=tsx .",
-    "dev": "concurrently --kill-others \"npm run dev:vue\" \"npm run dev:electron\"",
-    "clean:power": "taskkill /F /IM \"Gerenciador de Mangás.exe\" /T /FI \"STATUS eq RUNNING\" & taskkill /F /IM electron.exe /T",
-    "build:vue": "npm run build --prefix frontend",
+    "dev": "cross-env MANGA_ENV=local concurrently --kill-others \"npm run dev:vue\" \"npm run dev:electron\"",
+    "clean:power": "taskkill /F /IM \"Gerenciador de Mangás.exe\" /T & taskkill /F /IM electron.exe /T & taskkill /F /IM app.exe /T",
+    "clean:backend": "rimraf backend/app && rimraf backend/dist && rimraf backend/build && rimraf backend/app.spec",
     "build": "npm run build:py && npm run build:vue && electron-builder",
+    "build:vue": "npm run build --prefix frontend",
+    "build:fast": "npm run build:py && npm run build:vue && electron-builder --dir",
     "build:clear": "rimraf dist_electron && npm run build",
-    "build:py": "pyinstaller --noconfirm --onefile --windowed --distpath ./backend/dist ./backend/app.py",
-    "clean:backend": "rimraf backend/dist && rimraf backend/build && rimraf backend/app.spec",
+    "build:py": "node sync-version.js && python build_backend.py",
     "build:release": "npm run build:py && npm run build:vue && electron-builder --config electron-builder.release.json",
     "build:full": "npm run clean:backend && npm run build:clear",
-    "build:full-release": "npm run clean:backend && rimraf dist_electron_release && npm run build:release",
     "postinstall": "npm install --prefix frontend"
   },
   "build": {
-    "appId": "com.seuprojeto.gerenciadormangas",
+    "appId": "com.danielscarneiro.gerenciadormangas",
     "productName": "Gerenciador de Mangás",
     "directories": {
       "output": "dist_electron"
@@ -34,28 +36,35 @@
     ],
     "extraResources": [
       {
-        "from": "backend/dist/app.exe",
-        "to": "backend/app.exe"
+        "from": "backend/app",
+        "to": "backend/app"
       },
       {
         "from": "backend/data",
-        "to": "backend/data"
+        "to": "backend/data",
+        "filter": [
+          "!**/*.db"
+        ]
       },
       {
         "from": "frontend/public/img",
-        "to": "frontend/public/img"
+        "to": "frontend/public/img",
+        "filter": [
+          "default.jpg",
+          "!capa_*"
+        ]
       }
     ],
     "win": {
       "icon": "frontend/public/icon/manga.ico",
       "target": [
-        "nsis",
-        "portable"
+        "nsis"
       ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "include": "installer.nsh",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Gerenciador de Mangas"

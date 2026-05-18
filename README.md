@@ -37,9 +37,24 @@ Um gestor de mangás desktop construído com **Electron**, **Vue.js 3** e **Pyth
    - _Opcional:_ Certifique-se de ter o **Python 3.x** instalado no seu sistema e adicionado ao PATH caso deseje testar ou alterar o backend em modo de desenvolvimento.
 
 4. **Inicie o projeto em modo de desenvolvimento:**
+
    ```bash
    npm run dev
    ```
+
+5. **Compilar o instalador de produção:**
+
+   ```bash
+   npm run build:full
+   ```
+
+> **⚠️ Observação sobre o Windows SmartScreen / Antivírus**
+>
+> Como este é um projeto independente de código aberto, o instalador executável gerado não possui um certificado de assinatura digital pago da Microsoft. Por conta disso, o Windows SmartScreen ou alguns antivírus podem exibir um alerta de "Fornecedor Desconhecido" ou "Falso Positivo" ao iniciar o instalador.
+>
+> Para prosseguir com a instalação com segurança: Clique em "Mais informações" na tela do aviso e selecione o botão "Executar assim mesmo".
+>
+> Todo o código-fonte está totalmente aberto neste repositório para auditoria, garantindo a transparência e a segurança dos seus dados.
 
 ## 📄 Licença
 

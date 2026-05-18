@@ -104,16 +104,29 @@ function createWindow(): void {
   win.webContents.on("did-finish-load", async () => {
     if (ENABLE_DEBUG_LOGS) {
       win.webContents.send("log", "teste");
+      win.webContents.send(
+        "log",
+        "process.resourcesPath → " + process.resourcesPath,
+      );
+      win.webContents.send(
+        "log",
+        "app.getPath('userData') → " + app.getPath("userData"),
+      );
+      win.webContents.send("log", "app.getAppPath() → " + app.getAppPath());
 
+      // Testa leitura da pasta de imagens no build
       const imgDir = path.join(
-        process.resourcesPath,
+        app.getPath("userData"), // aqui você vê o que está em %APPDATA%
         "frontend",
         "public",
         "img",
       );
       try {
         const files = await fs.readdir(imgDir);
-        win.webContents.send("log", "Arquivos de capa encontrados no build:");
+        win.webContents.send(
+          "log",
+          "Arquivos de capa encontrados em userData:",
+        );
         files.forEach((f) => {
           win.webContents.send("log", " - " + f);
         });
@@ -135,7 +148,7 @@ ipcMain.handle(
     return new Promise((resolve, reject) => {
       const pythonPath = isDev
         ? "python"
-        : path.join(process.resourcesPath, "backend", "app.exe");
+        : path.join(process.resourcesPath, "backend", "app", "app.exe");
 
       const args = isDev ? [path.join(process.cwd(), "backend", "app.py")] : [];
 
@@ -188,19 +201,14 @@ ipcMain.handle("dialog:openFile", async () => {
   return canceled ? null : filePaths[0];
 });
 
-// NOVO HANDLER PARA CAPAS
+// NOVO HANDLER PARA CAPAS CORRIGIDO PARA PROD E DEV
 ipcMain.handle("get-capa-base64", async (_event, url: string) => {
   try {
-    const pathCapa = path.join(
-      isDev ? process.cwd() : process.resourcesPath,
-      "frontend",
-      "public",
-      "img",
-      url,
-    );
+    const pathCapa = isDev
+      ? path.join(process.cwd(), "frontend", "public", "img", url)
+      : path.join(app.getPath("userData"), "frontend", "public", "img", url);
 
     // Verifica se o arquivo existe de forma assíncrona
-    // O .catch(() => null) evita que o app quebre se o arquivo não existir
     const stats = await fs.stat(pathCapa).catch(() => null);
     if (!stats) return null;
 

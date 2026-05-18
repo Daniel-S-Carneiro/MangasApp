@@ -17,17 +17,51 @@ if sys.stdout.encoding != "utf-8":
 if sys.stdin.encoding != "utf-8":
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8")
 
+# --- LÓGICA DE DETECÇÃO DE AMBIENTE (DEV LOCAL VS APPDATA PROD) ---
+# Usando o nome exato que o Electron usa para a pasta corporativa: "Gerenciador de Mangás"
+APPDATA_BASE = os.environ.get("APPDATA", os.path.expanduser("~"))
+
 if getattr(sys, "frozen", False):
-    BASE_DIR = os.path.dirname(sys.executable)
-    IMG_DIR = os.path.join(os.path.dirname(BASE_DIR), "frontend", "public", "img")
+    # ---- MODO PRODUÇÃO (Instalado no PC do usuário) ----
+    APPDATA_DIR = os.path.join(APPDATA_BASE, "Gerenciador de Mangás")
+    BASE_RESOURCES_DIR = os.path.dirname(sys.executable)
+
+    db_path = os.path.join(APPDATA_DIR, "data", "mangas.db")
+    IMG_DIR = os.path.join(APPDATA_DIR, "frontend", "public", "img")
 else:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    IMG_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "frontend", "public", "img"))
+    # ---- MODO DESENVOLVIMENTO (Rodando via VS Code) ----
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Pasta backend/
+    BASE_RESOURCES_DIR = os.path.abspath(
+        os.path.join(BASE_DIR, "..")
+    )  # Raiz do projeto
 
-db_path = os.path.join(BASE_DIR, "data", "mangas.db")
+    db_path = os.path.join(BASE_DIR, "data", "mangas.db")
+    IMG_DIR = os.path.join(BASE_RESOURCES_DIR, "frontend", "public", "img")
 
+
+# Garante que as pastas do ambiente ativo existam
 os.makedirs(IMG_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+# --- PONTE PARA O SEU FLUXO DE DUAL BUILDS ---
+default_jpg_source = os.path.join(
+    BASE_RESOURCES_DIR, "frontend", "public", "img", "default.jpg"
+)
+default_jpg_destination = os.path.join(IMG_DIR, "default.jpg")
+
+if os.path.exists(default_jpg_source) and not os.path.exists(default_jpg_destination):
+    try:
+        shutil.copy2(default_jpg_source, default_jpg_destination)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"Erro ao copiar imagem padrao: {e}", file=sys.stderr)
+
+# Se houver um banco pré-moldado nos recursos originais
+default_db_source = os.path.join(BASE_RESOURCES_DIR, "backend", "data", "mangas.db")
+if os.path.exists(default_db_source) and not os.path.exists(db_path):
+    try:
+        shutil.copy2(default_db_source, db_path)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"Erro ao copiar banco inicial: {e}", file=sys.stderr)
 
 
 def send_response(data):
@@ -193,13 +227,54 @@ def main():
             conn.commit()
             send_response({"status": "OK", "capa": nome_final_capa})
 
+        elif action == "clear_database":
+            conn.close()  # Libera o arquivo mangas.db no Windows imediatamente
+            try:
+                # 1. Remove o arquivo físico do banco de dados active
+                if os.path.exists(db_path):
+                    os.remove(db_path)
+
+                # 2. Reseta a pasta de capas excluindo as geradas
+                if os.path.exists(IMG_DIR):
+                    shutil.rmtree(IMG_DIR)
+                    os.makedirs(IMG_DIR, exist_ok=True)
+
+                # 3. Restaura o default.jpg se ele estiver nos recursos originais
+                if os.path.exists(default_jpg_source):
+                    shutil.copy2(default_jpg_source, default_jpg_destination)
+
+                # 4. Recria um banco vazio estruturado
+                conn = sqlite3.connect(db_path)
+                cur = conn.cursor()
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS mangas (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nome_pt TEXT,
+                    nome_en TEXT,
+                    capitulo INTEGER,
+                    link TEXT,
+                    capa TEXT,
+                    status TEXT,
+                    ordem INTEGER
+                )
+                """)
+                conn.commit()
+                send_response({"status": "OK", "message": "Dados limpos com sucesso!"})
+                return
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                send_response({"error": f"Falha ao limpar dados: {str(e)}"})
+                return
+
         else:
             send_response({"error": f"Ação desconhecida: {action}"})
 
     except (json.JSONDecodeError, sqlite3.Error) as e:
         send_response({"error": str(e)})
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
 
 
 if __name__ == "__main__":

@@ -1,0 +1,30 @@
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(1, 1, 0, 0),
+    prodvers=(1, 1, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable(
+        '041604b0',
+        [
+          StringStruct('CompanyName', 'Daniel S. Carneiro'),
+          StringStruct('FileDescription', 'Backend de Integração SQLite do Gerenciador de Mangás'),
+          StringStruct('FileVersion', '1.1.0.0'),
+          StringStruct('InternalName', 'app'),
+          StringStruct('LegalCopyright', 'Copyright (c) 2026 Daniel S. Carneiro. Released under the MIT License.'),
+          StringStruct('OriginalFilename', 'app.exe'),
+          StringStruct('ProductName', 'Gerenciador de Mangás'),
+          StringStruct('ProductVersion', '1.1.0.0')
+        ]
+      )
+    ]),
+    VarFileInfo([VarStruct('Translation', [1046, 1200])])
+  ]
+)
