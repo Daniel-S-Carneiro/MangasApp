@@ -1,61 +1,66 @@
-# 📚 Manga Manager
+# 📚 Gerenciador de Mangas (MangasApp)
 
-Um gestor de mangás desktop construído com **Electron**, **Vue.js 3** e **Python**.
+> ⚠️ **Projeto descontinuado.** O MangasApp não recebe mais atualizações, e a **v1.2.0** é a última versão.
+>
+> O sucessor é o **[Manga_Manager](https://github.com/Daniel-S-Carneiro/Manga_Manager)**. Ele foi reescrito em Flutter, tem leitor embutido e backup, e funciona no Windows, no Linux e no Android.
+
+Gerenciador de mangás para Windows feito com **Electron**, **Vue 3** e **Python** (SQLite).
 
 ## 🚀 Funcionalidades
 
-- Gestão completa de mangás (CRUD).
-- Comunicação segura e assíncrona via IPC.
-- Carregamento de capas em Base64 para performance e segurança.
-- Interface moderna com suporte a tema escuro.
+- Cadastro de mangás com nome em português e em inglês, capítulo atual, link de leitura, capa e status (**Lendo**, **Concluído** e **Pausado**).
+- Busca pelo nome, reordenação arrastando os cards e carregamento da lista em páginas.
+- O botão **Ler** abre o link no navegador padrão.
+- Tema claro e escuro.
+- Todos os dados ficam no seu computador.
 
-## 🛠️ Tecnologias
+## 📥 Instalação
 
-- **Frontend:** Vue.js 3, TypeScript, Vite.
-- **Desktop:** Electron.
-- **Backend:** Python (Scripts de processamento de dados).
+Baixe o instalador `.exe` da [última release](https://github.com/Daniel-S-Carneiro/MangasApp/releases/latest) e execute.
 
-## 📦 Como Instalar e Rodar
+Os dados ficam em `%APPDATA%\Gerenciador de Mangas`. Ao desinstalar, o instalador pergunta se você quer apagá-los.
 
-1. **Clone o repositório:**
+**Vindo da v1.1.0?** Até a v1.1.0 o app se chamava "Gerenciador de Mangás", com acento, e os dados ficavam em `%APPDATA%\Gerenciador de Mangás`. O acento quebrava o novo protocolo de comunicação, por isso o nome ficou sem acento. Na primeira abertura, a v1.2.0 copia o banco e as capas da pasta antiga para a nova. A pasta antiga não é apagada.
 
-   ```bash
-   git clone [https://github.com/teu-utilizador/manga-manager.git](https://github.com/teu-utilizador/manga-manager.git)
-   cd manga-manager
-
-   ```
-
-2. **Instale as dependências de Node (Raiz e Frontend):**
-   ```bash
-   npm install
-   ```
-
-> **Nota:** O projeto utiliza o gancho `postinstall` para baixar automaticamente os pacotes da pasta `frontend` logo após concluir os da raiz.
-
-3. **Pré-requisitos do Python:**
-   - O backend foi desenvolvido utilizando apenas bibliotecas nativas do Python (`sqlite3`, `json`, `os`, etc.), portanto **não é necessário** criar ambiente virtual (`venv`) ou instalar dependências extras.
-   - _Opcional:_ Certifique-se de ter o **Python 3.x** instalado no seu sistema e adicionado ao PATH caso deseje testar ou alterar o backend em modo de desenvolvimento.
-
-4. **Inicie o projeto em modo de desenvolvimento:**
-
-   ```bash
-   npm run dev
-   ```
-
-5. **Compilar o instalador de produção:**
-
-   ```bash
-   npm run build:full
-   ```
-
-> **⚠️ Observação sobre o Windows SmartScreen / Antivírus**
+> **⚠️ Aviso do Windows SmartScreen ou do antivírus**
 >
-> Como este é um projeto independente de código aberto, o instalador executável gerado não possui um certificado de assinatura digital pago da Microsoft. Por conta disso, o Windows SmartScreen ou alguns antivírus podem exibir um alerta de "Fornecedor Desconhecido" ou "Falso Positivo" ao iniciar o instalador.
+> O instalador não tem assinatura digital paga da Microsoft. Por isso, o SmartScreen ou alguns antivírus podem mostrar um alerta de "Fornecedor desconhecido" ou um falso positivo.
 >
-> Para prosseguir com a instalação com segurança: Clique em "Mais informações" na tela do aviso e selecione o botão "Executar assim mesmo".
->
-> Todo o código-fonte está totalmente aberto neste repositório para auditoria, garantindo a transparência e a segurança dos seus dados.
+> Para instalar mesmo assim, clique em **Mais informações** e depois em **Executar assim mesmo**. Todo o código-fonte está aberto neste repositório para conferência.
+
+## 🛠️ Como funciona
+
+- **Frontend:** Vue 3, TypeScript e Vite.
+- **Desktop:** Electron. A janela roda com `contextIsolation` ligado e `nodeIntegration` desligado, e o preload expõe só uma API mínima.
+- **Backend:** Python com SQLite, compilado com PyInstaller. Ele fica aberto junto com o app e conversa com o Electron por stdin/stdout: uma mensagem JSON por linha, com um ID para cada requisição.
+- **Capas:** carregadas pelo protocolo `manga://`, que só lê arquivos da pasta de capas.
+
+## 💻 Desenvolvimento
+
+Requisitos: Node.js 22 ou mais novo, Python 3 no PATH e, para gerar o instalador, o PyInstaller (`python -m pip install pyinstaller`).
+
+```bash
+git clone https://github.com/Daniel-S-Carneiro/MangasApp.git
+cd MangasApp
+npm install
+```
+
+O `postinstall` instala também as dependências da pasta `frontend`.
+
+Para rodar em modo de desenvolvimento:
+
+```bash
+npm run dev
+```
+
+> O modo de desenvolvimento usa a mesma pasta de dados do app instalado.
+
+Para gerar o instalador em `dist_electron/`:
+
+```bash
+npm run build:full
+```
 
 ## 📄 Licença
 
-Este projeto está sob a licença MIT - veja o ficheiro [LICENSE](LICENSE) para detalhes.
+Distribuído sob a licença MIT. Veja o arquivo [LICENSE](LICENSE).

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from "vue";
+import { computed } from "vue";
 
+// Declaração de props unificada
 const props = defineProps<{
   manga: {
     id: number;
@@ -24,38 +25,16 @@ const emit = defineEmits([
 ]);
 
 const api = (window as any).api;
-const capaSrc = ref("./img/default.jpg");
-
-const carregarCapa = async () => {
-  if (!props.manga.capa || props.manga.capa === "default.jpg") {
-    capaSrc.value = "./img/default.jpg";
-    return;
-  }
-
-  if (
-    props.manga.capa.startsWith("capa_") ||
-    props.manga.capa.startsWith("manga_")
-  ) {
-    try {
-      const res = await api.getCapaBase64(props.manga.capa);
-      capaSrc.value = res || "./img/default.jpg";
-    } catch (error) {
-      console.error("Erro ao buscar Base64 da capa:", error);
-      capaSrc.value = "./img/default.jpg";
-    }
-  } else {
-    capaSrc.value = `./img/${props.manga.capa}`;
-  }
-};
-
-onMounted(carregarCapa);
-
-watch(() => props.manga.capa, carregarCapa);
-watch(() => props.manga, carregarCapa, { deep: true });
 
 const handleStatus = (id: number, status: string) =>
   emit("mudarStatus", id, status);
 const handleEdit = (manga: any) => emit("abrirModal", manga);
+
+// 🔥 Protocolo reativo e limpo (Sem refs manuais ou watchers)
+const mangaProtocolUrl = computed(() => {
+  if (!props.manga.capa) return "manga://default.jpg";
+  return `manga://${props.manga.capa}`;
+});
 </script>
 
 <template>
@@ -78,7 +57,7 @@ const handleEdit = (manga: any) => emit("abrirModal", manga);
       {{ props.manga.status }}
     </div>
 
-    <img :src="capaSrc" class="capa-manga" loading="lazy" />
+    <img :src="mangaProtocolUrl" class="capa-manga" loading="lazy" />
 
     <div class="info-container">
       <h3>{{ props.manga.nome_pt }}</h3>
@@ -177,7 +156,6 @@ const handleEdit = (manga: any) => emit("abrirModal", manga);
   gap: 6px;
 }
 
-/* --- Tags de Status Internas --- */
 .status-tag {
   position: absolute;
   top: 10px;
@@ -203,7 +181,6 @@ const handleEdit = (manga: any) => emit("abrirModal", manga);
   color: black;
 }
 
-/* --- Botões do Card --- */
 .btn-ler {
   flex: 4;
   background: #0099ff;

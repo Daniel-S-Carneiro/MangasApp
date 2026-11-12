@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from "vue";
+import { ref, onMounted, onUnmounted, computed, watch } from "vue"; // 1. Adicionado onUnmounted
 import MangaForm from "./components/MangaForm.vue";
 import MangaModal from "./components/MangaModal.vue";
 import MangaCard from "./components/MangaCard.vue";
@@ -30,6 +30,10 @@ const temMaisMangas = ref(true);
 
 const exibirAlertaLink = ref(false);
 const mensagemAlertaLink = ref("");
+
+// Funções para armazenar a limpeza dos listeners do Electron
+let limparLog: any;
+let limparAlert: any;
 
 // Filtro processado no banco de dados; a propriedade computada repassa a lista atualizada
 const mangasExibidos = computed(() => listaMangas.value);
@@ -209,13 +213,23 @@ function toggleTheme() {
 
 onMounted(() => {
   listarMangas();
-  window.api.onLog((message: string) => console.log(message));
-  window.api.onAlertLink((mensagem: string) => {
+
+  // Captura o retorno (any evita o erro de tipagem antiga do VS Code)
+  limparLog = window.api.onLog((message: string) => console.log(message));
+
+  limparAlert = window.api.onAlertLink((mensagem: string) => {
     mensagemAlertaLink.value = mensagem;
     exibirAlertaLink.value = true;
   });
+
   darkTheme.value = localStorage.getItem("theme") !== "light";
   document.body.classList.toggle("light-mode", !darkTheme.value);
+});
+
+// Executa a limpeza dos listeners ao desmontar para evitar duplicados
+onUnmounted(() => {
+  if (limparLog) limparLog();
+  if (limparAlert) limparAlert();
 });
 </script>
 

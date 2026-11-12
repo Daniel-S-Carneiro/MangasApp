@@ -10,6 +10,8 @@ import shutil
 import sqlite3
 import sys
 import uuid
+import traceback
+import argparse
 
 if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
@@ -17,23 +19,60 @@ if sys.stdout.encoding != "utf-8":
 if sys.stdin.encoding != "utf-8":
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8")
 
-# --- LÓGICA DE DETECÇÃO DE AMBIENTE (DEV LOCAL VS APPDATA PROD) ---
-# Usando o nome exato que o Electron usa para a pasta corporativa: "Gerenciador de Mangás"
-APPDATA_BASE = os.environ.get("APPDATA", os.path.expanduser("~"))
+# --- TRATAMENTO DE ARGUMENTOS VIA CLI ---
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--userdata", type=str, help="Caminho da pasta de dados do Electron"
+)
+args, unknown = parser.parse_known_args()
 
-if getattr(sys, "frozen", False):
-    # ---- MODO PRODUÇÃO (Instalado no PC do usuário) ----
-    APPDATA_DIR = os.path.join(APPDATA_BASE, "Gerenciador de Mangás")
-    BASE_RESOURCES_DIR = os.path.dirname(sys.executable)
+
+# --- FUNÇÕES DE SUPORTE ---
+def get_compiled_product_name() -> str:
+    """Recupera o nome do produto padrão caso o app rode sem argumentos."""
+    if getattr(sys, "frozen", False):
+        if hasattr(sys, "_MEIPASS"):
+            return "Gerenciador de Mangas"
+    return "Gerenciador de Mangas"
+
+
+# --- LÓGICA DE DETECÇÃO DE AMBIENTE (DYNAMIC USERDATA VS LOCAL DEV) ---
+
+# Agora ela está perfeitamente definida aqui em cima!
+PRODUCT_NAME = get_compiled_product_name()
+
+# No app instalado o app.exe fica em resources/backend/app/, e os recursos que
+# vêm com o instalador (como o default.jpg) ficam dois níveis acima, em
+# resources/. Apontar para a pasta do app.exe fazia o default.jpg nunca ser
+# copiado, e os mangás sem capa apareciam com a imagem quebrada.
+RECURSOS_INSTALADOS = os.path.abspath(
+    os.path.join(os.path.dirname(sys.executable), "..", "..")
+)
+
+if args.userdata:
+    # ---- MODO DINÂMICO (Garantido pelo Electron via argumento) ----
+    APPDATA_DIR = args.userdata
+    BASE_RESOURCES_DIR = (
+        RECURSOS_INSTALADOS
+        if getattr(sys, "frozen", False)
+        else os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    )
+
+    db_path = os.path.join(APPDATA_DIR, "data", "mangas.db")
+    IMG_DIR = os.path.join(APPDATA_DIR, "frontend", "public", "img")
+
+elif getattr(sys, "frozen", False):
+    # ---- FALLBACK PRODUÇÃO COMPILADO (Caso o EXE rode isolado sem argumento) ----
+    APPDATA_BASE = os.environ.get("APPDATA", os.path.expanduser("~"))
+    APPDATA_DIR = os.path.join(APPDATA_BASE, PRODUCT_NAME)
+    BASE_RESOURCES_DIR = RECURSOS_INSTALADOS
 
     db_path = os.path.join(APPDATA_DIR, "data", "mangas.db")
     IMG_DIR = os.path.join(APPDATA_DIR, "frontend", "public", "img")
 else:
-    # ---- MODO DESENVOLVIMENTO (Rodando via VS Code) ----
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Pasta backend/
-    BASE_RESOURCES_DIR = os.path.abspath(
-        os.path.join(BASE_DIR, "..")
-    )  # Raiz do projeto
+    # ---- MODO DESENVOLVIMENTO (Rodando via VS Code puro) ----
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    BASE_RESOURCES_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))
 
     db_path = os.path.join(BASE_DIR, "data", "mangas.db")
     IMG_DIR = os.path.join(BASE_RESOURCES_DIR, "frontend", "public", "img")
@@ -64,9 +103,10 @@ if os.path.exists(default_db_source) and not os.path.exists(db_path):
         print(f"Erro ao copiar banco inicial: {e}", file=sys.stderr)
 
 
-def send_response(data):
+# Modificado para receber a resposta empacotada contendo o ID correspondente da consulta
+def send_response(response_packet):
     """Envia o JSON garantindo que caracteres acentuados não sejam escapados."""
-    json_output = json.dumps(data, ensure_ascii=False)
+    json_output = json.dumps(response_packet, ensure_ascii=False)
     sys.stdout.write(json_output + "\n")
     sys.stdout.flush()
 
@@ -78,7 +118,10 @@ def main():
         conn.text_factory = lambda b: str(b, "utf-8", "ignore")
         cur = conn.cursor()
     except sqlite3.Error as e:
-        send_response({"error": f"Erro de conexão DB: {str(e)}"})
+        # Se falhar no boot, retorna erro genérico inicial empacotado sem ID
+        send_response(
+            {"id": None, "data": None, "error": f"Erro de conexão DB: {str(e)}"}
+        )
         return
 
     cur.execute("""
@@ -95,186 +138,222 @@ def main():
     """)
     conn.commit()
 
-    try:
-        input_data = sys.stdin.readline().strip()
-        if not input_data:
-            send_response([])
-            return
+    # Início do Loop Infinito do Sidecar. O Python fica escutando o sys.stdin continuamente.
+    while True:
+        req_id = None
+        try:
+            input_data = sys.stdin.readline()
 
-        payload = json.loads(input_data)
-        action = payload.get("action")
+            # Se o Electron fechar a conexão, a linha virá vazia e encerramos o loop
+            if not input_data:
+                break
 
-        if action == "insert":
-            origem_capa = payload.get("caminho_completo")
-            nome_final_capa = "default.jpg"
+            input_data = input_data.strip()
+            if not input_data:
+                continue
 
-            if origem_capa and os.path.exists(origem_capa):
-                extensao = os.path.splitext(origem_capa)[1]
-                nome_final_capa = f"capa_{uuid.uuid4().hex}{extensao}"
-                shutil.copy2(origem_capa, os.path.join(IMG_DIR, nome_final_capa))
+            # Desembrulha o pacote recebido do Electron
+            request_packet = json.loads(input_data)
+            req_id = request_packet.get("id")
+            payload = request_packet.get("payload", {})
+            action = payload.get("action")
 
-            cur.execute("SELECT MAX(ordem) FROM mangas")
-            res = cur.fetchone()
-            proxima_ordem = (res[0] + 1) if (res and res[0] is not None) else 0
+            # Variáveis padrão para retorno interno da iteração
+            result_data = None
+            error_message = None
 
-            cur.execute(
-                "INSERT INTO mangas (nome_pt, nome_en, capitulo, link, capa, status, ordem) "
-                "VALUES (?,?,?,?,?,?,?)",
-                (
-                    payload.get("nome_pt"),
-                    payload.get("nome_en"),
-                    payload.get("capitulo"),
-                    payload.get("link"),
-                    nome_final_capa,
-                    payload.get("status", "Lendo"),
-                    proxima_ordem,
-                ),
-            )
+            if action == "insert":
+                origem_capa = payload.get("caminho_completo")
+                nome_final_capa = "default.jpg"
 
-            conn.commit()
-            new_id = cur.lastrowid
-            send_response({"status": "OK", "capa": nome_final_capa, "id": new_id})
-
-        elif action == "list":
-            limite = payload.get("limite", 20)
-            pagina = payload.get("pagina", 1)
-            filtro_texto = payload.get("filtro", "").strip()
-
-            offset = (pagina - 1) * limite
-
-            if filtro_texto:
-                query = (
-                    "SELECT * FROM mangas "
-                    "WHERE nome_pt LIKE ? "
-                    "ORDER BY ordem ASC LIMIT ? OFFSET ?"
-                )
-                cur.execute(query, (f"%{filtro_texto}%", limite, offset))
-            else:
-                query = "SELECT * FROM mangas ORDER BY ordem ASC LIMIT ? OFFSET ?"
-                cur.execute(query, (limite, offset))
-
-            rows = cur.fetchall()
-            results = [
-                {
-                    "id": r[0],
-                    "nome_pt": r[1],
-                    "nome_en": r[2],
-                    "capitulo": r[3],
-                    "link": r[4],
-                    "capa": r[5],
-                    "status": r[6],
-                    "ordem": r[7],
-                }
-                for r in rows
-            ]
-            send_response(results)
-
-        elif action == "delete":
-            cur.execute("SELECT capa FROM mangas WHERE id = ?", (payload.get("id"),))
-            res = cur.fetchone()
-            if res and res[0] != "default.jpg":
-                path_arq = os.path.join(IMG_DIR, res[0])
-                if os.path.exists(path_arq):
-                    os.remove(path_arq)
-            cur.execute("DELETE FROM mangas WHERE id = ?", (payload.get("id"),))
-            conn.commit()
-            send_response({"status": "OK"})
-
-        elif action == "update_status":
-            cur.execute(
-                "UPDATE mangas SET status = ? WHERE id = ?",
-                (payload.get("status"), payload.get("id")),
-            )
-            conn.commit()
-            send_response({"status": "OK"})
-
-        elif action == "update_order":
-            for index, manga_id in enumerate(payload.get("order_list", [])):
-                cur.execute(
-                    "UPDATE mangas SET ordem = ? WHERE id = ?", (index, manga_id)
-                )
-            conn.commit()
-            send_response({"status": "OK"})
-
-        elif action == "update_full":
-            manga_id = payload.get("id")
-            novo_capitulo = payload.get("capitulo")
-            novo_link = payload.get("link")
-            origem_capa = payload.get("caminho_completo")
-            capa_atual = payload.get("capa")
-
-            nome_final_capa = capa_atual
-
-            if origem_capa and os.path.exists(origem_capa):
-                try:
-                    cur.execute("SELECT capa FROM mangas WHERE id = ?", (manga_id,))
-                    res_antigo = cur.fetchone()
-                    if res_antigo and res_antigo[0] != "default.jpg":
-                        path_antigo = os.path.join(IMG_DIR, res_antigo[0])
-                        if os.path.exists(path_antigo):
-                            os.remove(path_antigo)
-
+                if origem_capa and os.path.exists(origem_capa):
                     extensao = os.path.splitext(origem_capa)[1]
                     nome_final_capa = f"capa_{uuid.uuid4().hex}{extensao}"
                     shutil.copy2(origem_capa, os.path.join(IMG_DIR, nome_final_capa))
-                except Exception:  # pylint: disable=broad-exception-caught
-                    nome_final_capa = "default.jpg"
 
-            cur.execute(
-                "UPDATE mangas SET capitulo = ?, link = ?, capa = ? WHERE id = ?",
-                (novo_capitulo, novo_link, nome_final_capa, manga_id),
-            )
-            conn.commit()
-            send_response({"status": "OK", "capa": nome_final_capa})
+                cur.execute("SELECT MAX(ordem) FROM mangas")
+                res = cur.fetchone()
+                proxima_ordem = (res[0] + 1) if (res and res[0] is not None) else 0
 
-        elif action == "clear_database":
-            conn.close()  # Libera o arquivo mangas.db no Windows imediatamente
-            try:
-                # 1. Remove o arquivo físico do banco de dados active
-                if os.path.exists(db_path):
-                    os.remove(db_path)
-
-                # 2. Reseta a pasta de capas excluindo as geradas
-                if os.path.exists(IMG_DIR):
-                    shutil.rmtree(IMG_DIR)
-                    os.makedirs(IMG_DIR, exist_ok=True)
-
-                # 3. Restaura o default.jpg se ele estiver nos recursos originais
-                if os.path.exists(default_jpg_source):
-                    shutil.copy2(default_jpg_source, default_jpg_destination)
-
-                # 4. Recria um banco vazio estruturado
-                conn = sqlite3.connect(db_path)
-                cur = conn.cursor()
-                cur.execute("""
-                CREATE TABLE IF NOT EXISTS mangas (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nome_pt TEXT,
-                    nome_en TEXT,
-                    capitulo INTEGER,
-                    link TEXT,
-                    capa TEXT,
-                    status TEXT,
-                    ordem INTEGER
+                cur.execute(
+                    "INSERT INTO mangas (nome_pt, nome_en, capitulo, link, capa, status, ordem) "
+                    "VALUES (?,?,?,?,?,?,?)",
+                    (
+                        payload.get("nome_pt"),
+                        payload.get("nome_en"),
+                        payload.get("capitulo"),
+                        payload.get("link"),
+                        nome_final_capa,
+                        payload.get("status", "Lendo"),
+                        proxima_ordem,
+                    ),
                 )
-                """)
+
                 conn.commit()
-                send_response({"status": "OK", "message": "Dados limpos com sucesso!"})
-                return
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                send_response({"error": f"Falha ao limpar dados: {str(e)}"})
-                return
+                new_id = cur.lastrowid
+                result_data = {"status": "OK", "capa": nome_final_capa, "id": new_id}
 
-        else:
-            send_response({"error": f"Ação desconhecida: {action}"})
+            elif action == "list":
+                limite = payload.get("limite", 20)
+                pagina = payload.get("pagina", 1)
+                filtro_texto = payload.get("filtro", "").strip()
 
-    except (json.JSONDecodeError, sqlite3.Error) as e:
-        send_response({"error": str(e)})
-    finally:
-        try:
-            conn.close()
-        except Exception:  # pylint: disable=broad-exception-caught
-            pass
+                offset = (pagina - 1) * limite
+
+                if filtro_texto:
+                    query = (
+                        "SELECT * FROM mangas "
+                        "WHERE nome_pt LIKE ? "
+                        "ORDER BY ordem ASC LIMIT ? OFFSET ?"
+                    )
+                    cur.execute(query, (f"%{filtro_texto}%", limite, offset))
+                else:
+                    query = "SELECT * FROM mangas ORDER BY ordem ASC LIMIT ? OFFSET ?"
+                    cur.execute(query, (limite, offset))
+
+                rows = cur.fetchall()
+                result_data = [
+                    {
+                        "id": r[0],
+                        "nome_pt": r[1],
+                        "nome_en": r[2],
+                        "capitulo": r[3],
+                        "link": r[4],
+                        "capa": r[5],
+                        "status": r[6],
+                        "ordem": r[7],
+                    }
+                    for r in rows
+                ]
+
+            elif action == "delete":
+                cur.execute(
+                    "SELECT capa FROM mangas WHERE id = ?", (payload.get("id"),)
+                )
+                res = cur.fetchone()
+                if res and res[0] != "default.jpg":
+                    path_arq = os.path.join(IMG_DIR, res[0])
+                    if os.path.exists(path_arq):
+                        os.remove(path_arq)
+                cur.execute("DELETE FROM mangas WHERE id = ?", (payload.get("id"),))
+                conn.commit()
+                result_data = {"status": "OK"}
+
+            elif action == "update_status":
+                cur.execute(
+                    "UPDATE mangas SET status = ? WHERE id = ?",
+                    (payload.get("status"), payload.get("id")),
+                )
+                conn.commit()
+                result_data = {"status": "OK"}
+
+            elif action == "update_order":
+                for index, manga_id in enumerate(payload.get("order_list", [])):
+                    cur.execute(
+                        "UPDATE mangas SET ordem = ? WHERE id = ?", (index, manga_id)
+                    )
+                conn.commit()
+                result_data = {"status": "OK"}
+
+            elif action == "update_full":
+                manga_id = payload.get("id")
+                novo_capitulo = payload.get("capitulo")
+                novo_link = payload.get("link")
+                origem_capa = payload.get("caminho_completo")
+                capa_atual = payload.get("capa")
+
+                nome_final_capa = capa_atual
+
+                if origem_capa and os.path.exists(origem_capa):
+                    try:
+                        cur.execute("SELECT capa FROM mangas WHERE id = ?", (manga_id,))
+                        res_antigo = cur.fetchone()
+                        if res_antigo and res_antigo[0] != "default.jpg":
+                            path_antigo = os.path.join(IMG_DIR, res_antigo[0])
+                            if os.path.exists(path_antigo):
+                                os.remove(path_antigo)
+
+                        extensao = os.path.splitext(origem_capa)[1]
+                        nome_final_capa = f"capa_{uuid.uuid4().hex}{extensao}"
+                        shutil.copy2(
+                            origem_capa, os.path.join(IMG_DIR, nome_final_capa)
+                        )
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        nome_final_capa = "default.jpg"
+
+                cur.execute(
+                    "UPDATE mangas SET capitulo = ?, link = ?, capa = ? WHERE id = ?",
+                    (novo_capitulo, novo_link, nome_final_capa, manga_id),
+                )
+                conn.commit()
+                result_data = {"status": "OK", "capa": nome_final_capa}
+
+            elif action == "clear_database":
+                conn.close()  # Libera o arquivo mangas.db no Windows imediatamente
+                try:
+                    # 1. Remove o arquivo físico do banco de dados active
+                    if os.path.exists(db_path):
+                        os.remove(db_path)
+
+                    # 2. Reseta a pasta de capas excluindo as geradas
+                    if os.path.exists(IMG_DIR):
+                        shutil.rmtree(IMG_DIR)
+                        os.makedirs(IMG_DIR, exist_ok=True)
+
+                    # 3. Restaura o default.jpg se ele estiver nos recursos originais
+                    if os.path.exists(default_jpg_source):
+                        shutil.copy2(default_jpg_source, default_jpg_destination)
+
+                    # 4. Recria um banco vazio estruturado e atualiza os ponteiros do loop
+                    conn = sqlite3.connect(db_path)
+                    conn.text_factory = lambda b: str(b, "utf-8", "ignore")
+                    cur = conn.cursor()
+                    cur.execute("""
+                    CREATE TABLE IF NOT EXISTS mangas (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        nome_pt TEXT,
+                        nome_en TEXT,
+                        capitulo INTEGER,
+                        link TEXT,
+                        capa TEXT,
+                        status TEXT,
+                        ordem INTEGER
+                    )
+                    """)
+                    conn.commit()
+                    result_data = {
+                        "status": "OK",
+                        "message": "Dados limpos com sucesso!",
+                    }
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    error_message = f"Falha ao limpar dados: {str(e)}"
+                    # Se falhou, reconecta no banco de dados por segurança para não quebrar o loop
+                    conn = sqlite3.connect(db_path)
+                    conn.text_factory = lambda b: str(b, "utf-8", "ignore")
+                    cur = conn.cursor()
+
+            else:
+                error_message = f"Ação desconhecida: {action}"
+
+            # Devolve a resposta estruturada para o Electron mapeada com o ID correspondente
+            send_response({"id": req_id, "data": result_data, "error": error_message})
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            # Evita que erros inesperados
+            # de processamento de JSON matem o loop persistente do Sidecar
+            send_response(
+                {
+                    "id": req_id,
+                    "data": None,
+                    "error": f"Erro crítico no loop do Python: {str(e)}\n{traceback.format_exc()}",
+                }
+            )
+
+    # Fora do while: fechamento seguro caso o loop seja quebrado voluntariamente
+    try:
+        conn.close()
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
 
 
 if __name__ == "__main__":

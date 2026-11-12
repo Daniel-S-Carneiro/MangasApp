@@ -20,33 +20,50 @@ async function escolherCapa() {
   }
 }
 
+// Volta o formulário ao estado inicial. O caminhoCompleto também precisa
+// ser limpo: sem isso, o próximo mangá salvo sem escolher capa recebia uma
+// cópia da capa do anterior.
+function limparFormulario() {
+  nomePt.value = "";
+  nomeEn.value = "";
+  capitulo.value = 1;
+  linkManga.value = "";
+  statusManga.value = "Lendo";
+  capaArquivo.value = "";
+  caminhoCompleto.value = "";
+}
+
 async function salvarManga() {
   if (!nomePt.value) return;
 
-  const res = await window.api.callPython({
-    action: "insert",
-    nome_pt: nomePt.value,
-    nome_en: nomeEn.value,
-    capitulo: capitulo.value,
-    link: linkManga.value,
-    status: statusManga.value,
-    capa: capaArquivo.value || "default.jpg",
-    caminho_completo: caminhoCompleto.value,
-  });
+  try {
+    // O Electron devolve a resposta do Python como texto JSON
+    const resposta = await window.api.callPython({
+      action: "insert",
+      nome_pt: nomePt.value,
+      nome_en: nomeEn.value,
+      capitulo: capitulo.value,
+      link: linkManga.value,
+      status: statusManga.value,
+      capa: capaArquivo.value || "default.jpg",
+      caminho_completo: caminhoCompleto.value,
+    });
+    const res = JSON.parse(resposta);
 
-  emit("saved", {
-    id: res.id,
-    nome_pt: nomePt.value,
-    nome_en: nomeEn.value,
-    capitulo: capitulo.value,
-    link: linkManga.value,
-    status: statusManga.value,
-    capa: res.capa,
-  });
+    emit("saved", {
+      id: res.id,
+      nome_pt: nomePt.value,
+      nome_en: nomeEn.value,
+      capitulo: capitulo.value,
+      link: linkManga.value,
+      status: statusManga.value,
+      capa: res.capa,
+    });
 
-  nomePt.value = "";
-  nomeEn.value = "";
-  capaArquivo.value = "";
+    limparFormulario();
+  } catch (error) {
+    console.error("Erro ao salvar mangá:", error);
+  }
 }
 </script>
 
